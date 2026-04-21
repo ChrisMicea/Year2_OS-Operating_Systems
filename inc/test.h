@@ -24,4 +24,11 @@ typedef enum {
     MANAGER, INSPECTOR
 } role_t;
 
+typedef enum {
+    OK, 
+    USER_WRONG_COMMAND,
+    ERROR_HANDLE_USER_COMMAND,
+    ERROR_USER_ARGUMENTS_FOR_ADD
+} returnType_t;
+
 #endif // TEST_H
