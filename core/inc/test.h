@@ -7,12 +7,13 @@
 #define NAME_LEN 20
 #define ISSUE_CATEGORY_LEN 20
 #define DESCRIPTION_LEN 200
+#define RELATIVE_FILEPATH "./districts/" 
 
 typedef struct {
     int reportID;
     char inspectorName[NAME_LEN];
     struct {
-        float latitude, longitude;
+        float x, y;
     } coords;
     char issueCategory[ISSUE_CATEGORY_LEN];
     int severityLevel; // 1 = minor, 2 = moderate, 3 = critical
@@ -26,9 +27,10 @@ typedef enum {
 
 typedef enum {
     OK, 
-    USER_WRONG_COMMAND,
+    ERROR_USER_WRONG_COMMAND,
     ERROR_HANDLE_USER_COMMAND,
-    ERROR_USER_ARGUMENTS_FOR_ADD
+    ERROR_USER_ARGUMENTS_FOR_ADD,
+    ERROR
 } returnType_t;
 
 #endif // TEST_H
