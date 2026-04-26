@@ -1,3 +1,7 @@
+--- sa adaug un print function comun pt code duplication in view_specific_report, list_reports si filter_reports
 --- sa fac consistent return type-urile la toate functiile, folosesc enum
 --- in view, list (si altele, daca e cazul), sa incerc sa ma folosesc mai intai de symlink, abia apoi de directory path, ca in add_report
 --- sa fac sa mearga logged_district.txt sa dea record automat la toate operatiunile pe un district
+--- scan, detect and report dangling symbolic links
+--- update ai_usage.md maybe if first lines of description / storytelling are not enough
+--- maybe REFACTOR TO TAKE INTO ACCOUNT THE PERMISSION BITS OF EACH FILE intead of role == MANAGER

@@ -52,11 +52,11 @@ int list_reports(char* districtID);
 int view_specific_report(char* districtID, char* reportID);
 int update_threshold(char* districtID, char* value);
 int remove_report(char* districtID, char* reportID);
-
-// for adding reports - does a cmd-line interface that takes from the user the required x, y and other data
+int parse_condition(const char *input, char *field, char *op, char *value);
+int match_condition(const report_t *report, const char *field, const char *op, const char *value);
+int filter_reports(char *districtID, char **conditions, int num_conditions);
 int add_report(char* districtID);
 
-// REFACTOR TO TAKE INTO ACCOUNT THE PERMISSION BITS OF EACH FILE
 int role = -1;
 char user[NAME_LEN];
 
@@ -100,7 +100,11 @@ int main(int argc, char* argv[]) {
     // actual usage
     // send argc - 5 and argv + 5 as parameters because the previous 
     // cmd-line arguments have been handled
-    handle_user_commands(argc - 5, argv + 5); 
+    int retVal = handle_user_commands(argc - 5, argv + 5);
+    
+    if (retVal != 0) {
+        printf("Error applying user command\n");
+    }
 }
 
 int set_role(char* roleStr) 
@@ -167,7 +171,15 @@ int handle_user_commands(int argc, char* argv[])
         }
     }
     else if (strcmp(argv[0], "--filter") == 0) {
-        ;
+        if (argc < 3) {
+            printf("Incorrect usage - not enough arguments for 'filter'\n");
+            print_usage();
+        }
+        else {
+            // argv[1] = districtID, argv[2..] = one condition per slot
+            int nConditions = argc - 2;
+            retVal = filter_reports(argv[1], argv + 2, nConditions);
+        }
     }
 
     return retVal;
@@ -310,6 +322,260 @@ int update_threshold(char* districtID, char* value)
     close(fd);
     printf("Threshold updated to %d for district '%s'.\n", threshold, districtID);
     return OK;
+}
+
+int filter_reports(char *districtID, char **conditions, int num_conditions)
+{
+    // parse all conditions up front — fail fast before opening any file
+    char fields[num_conditions][32];
+    char ops[num_conditions][4];
+    char values[num_conditions][DESCRIPTION_LEN];
+
+    for (int i = 0; i < num_conditions; i++) {
+        if (parse_condition(conditions[i], fields[i], ops[i], values[i]) != 0) {
+            fprintf(stderr, "Invalid condition: \"%s\"\n", conditions[i]);
+            fprintf(stderr, "Expected format: field:op:value  e.g. severity:>:2\n");
+            return -1;
+        }
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror("open reports.dat");
+        return -1;
+    }
+
+    report_t report;
+    int count = 0; // for print at the end if no records matching the condition are met
+    while (read(fd, &report, sizeof(report_t)) == sizeof(report_t)) {
+        int match = 1;
+        for (int i = 0; i < num_conditions; i++) { // record should satisfy all conditions
+            if (!match_condition(&report, fields[i], ops[i], values[i])) {
+                match = 0;
+                break;
+            }
+        }
+
+        if (match) {
+            char timeStamp[64];
+            struct tm* time = localtime(&report.timestamp);
+            strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d %H:%M:%S", time);
+
+            printf("ID: %d | Inspector: %s | Category: %s | Severity: %d | Time: %s\n",
+                report.reportID,
+                report.inspectorName,
+                report.issueCategory,
+                report.severityLevel,
+                timeStamp);
+            count++;
+        }
+    }
+
+    close(fd);
+
+    if (count == 0)
+        printf("No reports match all conditions in district '%s'.\n", districtID);
+    else
+        printf("%d report(s) matched\n", count);
+
+    return OK;
+}
+
+/*
+ * parse_condition - splits "field:op:value" into three separate buffers.
+ *
+ * Supported operators: ==, !=, >, <, >=, <=
+ * Example inputs:
+ *   "severity:>:2"
+ *   "category:==:flooding"
+ *   "inspector:==:alice"
+ *
+ * Returns 0 on success, -1 on malformed input.
+ *
+ * Caller must ensure field/op/value buffers are large enough.
+ * Recommended: field[32], op[4], value[DESCRIPTION_LEN]
+ */
+int parse_condition(const char *input, char *field, char *op, char *value)
+{
+    if (!input || !field || !op || !value) {
+        fprintf(stderr, "parse_condition: NULL argument\n");
+        return -1;
+    }
+
+    printf("input is %s\n", input);
+
+    /* Find the first colon — separates field from operator */
+    const char *first_colon = strchr(input, ':');
+    if (!first_colon) {
+        fprintf(stderr, "parse_condition: missing first ':' in \"%s\"\n", input);
+        return -1;
+    }
+
+    /* Find the second colon — separates operator from value */
+    const char *second_colon = strchr(first_colon + 1, ':');
+    if (!second_colon) {
+        fprintf(stderr, "parse_condition: missing second ':' in \"%s\"\n", input);
+        return -1;
+    }
+
+    /* Extract field */
+    size_t field_len = first_colon - input;
+    if (field_len == 0) {
+        fprintf(stderr, "parse_condition: empty field in \"%s\"\n", input);
+        return -1;
+    }
+    strncpy(field, input, field_len);
+    field[field_len] = '\0';
+
+    /* Extract operator */
+    size_t op_len = second_colon - (first_colon + 1);
+    if (op_len == 0 || op_len > 2) {   /* longest valid op is ">=", 2 chars */
+        fprintf(stderr, "parse_condition: bad operator length in \"%s\"\n", input);
+        return -1;
+    }
+    strncpy(op, first_colon + 1, op_len);
+    op[op_len] = '\0';
+
+    /* Validate operator is one of the recognised tokens */
+    if (strcmp(op, "==") != 0 && strcmp(op, "!=") != 0 &&
+        strcmp(op, ">")  != 0 && strcmp(op, "<")  != 0 &&
+        strcmp(op, ">=") != 0 && strcmp(op, "<=") != 0) 
+        {
+        fprintf(stderr, "parse_condition: unrecognised operator \"%s\"\n", op);
+        return -1;
+    }
+
+    /* Extract value — everything after the second colon */
+    const char *val_start = second_colon + 1;
+    if (*val_start == '\0') {
+        fprintf(stderr, "parse_condition: empty value in \"%s\"\n", input);
+        return -1;
+    }
+    strcpy(value, val_start);   /* safe: caller owns a buffer sized to the input */
+
+    return OK;   /* OK */
+}
+
+/*
+ * match_condition - returns 1 if report 'report' satisfies field op value, 0 otherwise.
+ *
+ * Numeric fields  (reportID, severityLevel, timestamp, coords.x, coords.y):
+ *   all six comparison operators apply: ==  !=  <  >  <=  >=
+ *
+ * String fields   (inspectorName, issueCategory, description):
+ *   only == and != are meaningful; </>/<=/>=  are rejected and return 0.
+ *
+ * Field name aliases accepted:
+ *   "id"          → reportID
+ *   "inspector"   → inspectorName
+ *   "x" / "lat"  → coords.x
+ *   "y" / "lon"  → coords.y
+ *   "category"   → issueCategory
+ *   "severity"   → severityLevel
+ *   "timestamp"  → timestamp
+ *   "description"→ description
+ */
+
+/* ── internal helpers ─────────────────────────────────────────────────── */
+
+/* apply op to two longs; all six operators */
+static int cmp_long(long lhs, const char *op, long rhs)
+{
+    if (strcmp(op, "==") == 0) return lhs == rhs;
+    if (strcmp(op, "!=") == 0) return lhs != rhs;
+    if (strcmp(op, "<")  == 0) return lhs <  rhs;
+    if (strcmp(op, ">")  == 0) return lhs >  rhs;
+    if (strcmp(op, "<=") == 0) return lhs <= rhs;
+    if (strcmp(op, ">=") == 0) return lhs >= rhs;
+    return 0;
+}
+
+/* apply op to two doubles */
+static int cmp_double(double lhs, const char *op, double rhs)
+{
+    if (strcmp(op, "==") == 0) return lhs == rhs;   /* exact float compare —
+                                                        fine for filter use */
+    if (strcmp(op, "!=") == 0) return lhs != rhs;
+    if (strcmp(op, "<")  == 0) return lhs <  rhs;
+    if (strcmp(op, ">")  == 0) return lhs >  rhs;
+    if (strcmp(op, "<=") == 0) return lhs <= rhs;
+    if (strcmp(op, ">=") == 0) return lhs >= rhs;
+    return 0;
+}
+
+/* apply op to two strings; only == and != are permitted */
+static int cmp_string(const char *lhs, const char *op, const char *rhs)
+{
+    if (strcmp(op, "==") == 0) return strcmp(lhs, rhs) == 0;
+    if (strcmp(op, "!=") == 0) return strcmp(lhs, rhs) != 0;
+
+    fprintf(stderr,
+            "match_condition: operator \"%s\" is not valid for string fields\n",
+            op);
+    return 0;
+}
+
+/* ── public function ──────────────────────────────────────────────────── */
+
+int match_condition(const report_t *report, const char *field,
+                    const char *op, const char *value)
+{
+    if (!report || !field || !op || !value) {
+        fprintf(stderr, "match_condition: NULL argument\n");
+        return 0;
+    }
+
+    /* ── numeric fields ─────────────────────────────────────────────── */
+
+    if (strcmp(field, "id") == 0) {
+        long rhs = atol(value);
+        return cmp_long((long)report->reportID, op, rhs);
+    }
+
+    if (strcmp(field, "severity") == 0) {
+        long rhs = atol(value);
+        if (rhs < 1 || rhs > 3) {
+            fprintf(stderr,
+                    "match_condition: severity value must be 1, 2 or 3 (got \"%s\")\n",
+                    value);
+            return 0;
+        }
+        return cmp_long((long)report->severityLevel, op, rhs);
+    }
+
+    if (strcmp(field, "timestamp") == 0) {
+        long rhs = atol(value);
+        return cmp_long((long)report->timestamp, op, rhs);
+    }
+
+    if (strcmp(field, "x") == 0 || strcmp(field, "lat") == 0) {
+        double rhs = atof(value);
+        return cmp_double((double)report->coords.x, op, rhs);
+    }
+
+    if (strcmp(field, "y") == 0 || strcmp(field, "lon") == 0) {
+        double rhs = atof(value);
+        return cmp_double((double)report->coords.y, op, rhs);
+    }
+
+    /* ── string fields ──────────────────────────────────────────────── */
+
+    if (strcmp(field, "inspector") == 0)
+        return cmp_string(report->inspectorName, op, value);
+
+    if (strcmp(field, "category") == 0)
+        return cmp_string(report->issueCategory, op, value);
+
+    if (strcmp(field, "description") == 0)
+        return cmp_string(report->description, op, value);
+
+    /* ── unknown field ──────────────────────────────────────────────── */
+
+    fprintf(stderr, "match_condition: unknown field \"%s\"\n", field);
+    return 0;
 }
 
 int view_specific_report(char* districtID, char* reportID) 
