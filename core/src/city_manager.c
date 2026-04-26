@@ -8,8 +8,8 @@
 #include <dirent.h>
 #include "../inc/test.h"
 
-void printUsage() {
-    printf("Usage:\n========= Mandatory =========\ncity_manager\t--role + <inspector/manager>\t"
+void print_usage() {
+    printf("Usage:\n========= Mandatory =========\ncity_manager\time--role + <inspector/manager>\time"
            "--user + <username>\n"
            "========= add (district or report) =========\n"
            "--add + [--type district OR -d] + <district_id> [ + report_filename"
@@ -49,6 +49,9 @@ int create_district(char* districtID);
 int write_report(char* reportFilepath);
 int get_next_report_id(int fd);
 int list_reports(char* districtID);
+int view_specific_report(char* districtID, char* reportID);
+int update_threshold(char* districtID, char* value);
+int remove_report(char* districtID, char* reportID);
 
 // for adding reports - does a cmd-line interface that takes from the user the required x, y and other data
 int add_report(char* districtID);
@@ -65,32 +68,32 @@ int main(int argc, char* argv[]) {
     umask(0); 
 
     if (argc < 6) {
-        fprintf(stderr, "Too few arguments");
-        printUsage();
+        fprintf(stderr, "Too few arguments\n");
+        print_usage();
         return ERROR_USER_WRONG_COMMAND;
     }
 
     if (strcmp(argv[1], "--role")) {
-        fprintf(stderr, "Invalide usage, first argument needs to be the role");
-        printUsage();
+        fprintf(stderr, "Invalide usage, first argument needs to be the role\n");
+        print_usage();
         return ERROR_USER_WRONG_COMMAND;
     }
 
     // handle role
     if (set_role(argv[2])) {
-        fprintf(stderr, "Setting role failed");
+        fprintf(stderr, "Setting role failed\n");
         return ERROR_HANDLE_USER_COMMAND;
     }
 
     if (strcmp(argv[3], "--user")) {
-        fprintf(stderr, "Invalide usage, second argument needs to be the user");
-        printUsage();
+        fprintf(stderr, "Invalide usage, second argument needs to be the user\n");
+        print_usage();
         return ERROR_USER_WRONG_COMMAND;
     }
 
     // handle_user
     if (set_user(argv[4])) {
-        fprintf(stderr, "Username too long or other problem in setting the user");
+        fprintf(stderr, "Username too long or other problem in setting the user\n");
         return ERROR_USER_WRONG_COMMAND;
     }
 
@@ -128,28 +131,301 @@ int set_user(char* userStr)
 int handle_user_commands(int argc, char* argv[])
 {
     // return 0;
-    int retVal;
+    int retVal = -1;
 
     if (strcmp(argv[0], "--add") == 0) {
         retVal = add(argc, argv);
     }
     else if (strcmp(argv[0], "--list") == 0) {
-        list_reports(argv[1]);
+        retVal = list_reports(argv[1]);
     }
     else if (strcmp(argv[0], "--view") == 0) {
-        ;
+        if (argc < 3) {
+            printf("Incorrect usage - not enough arguments for 'view'\n");
+            print_usage();
+        }
+        else {
+            retVal = view_specific_report(argv[1], argv[2]);
+        }
     }
     else if (strcmp(argv[0], "--remove_report") == 0) {
-        ;
+        if (argc < 3) {
+            printf("Incorrect usage - not enough arguments for 'remove report'\n");
+            print_usage();
+        }
+        else {
+            retVal = remove_report(argv[1], argv[2]);
+        }
     }
     else if (strcmp(argv[0], "--update_threshold") == 0) {
-        ;
+        if (argc < 3) {
+            printf("Incorrect usage - not enough arguments for 'update threshold'\n");
+            print_usage();
+        }
+        else {
+            retVal = update_threshold(argv[1], argv[2]);
+        }
     }
     else if (strcmp(argv[0], "--filter") == 0) {
         ;
     }
 
     return retVal;
+}
+
+int remove_report(char* districtID, char* reportID)
+{
+    // manager only
+    if (role != MANAGER) {
+        printf("Permission denied: remove_report is for managers only.\n");
+        return -1;
+    }
+
+    int id = atoi(reportID);
+    if (id < 0) {
+        printf("Invalid report ID: '%s'\n", reportID);
+        return -1;
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
+
+    int fd = open(path, O_RDWR);
+    if (fd == -1) {
+        perror("open reports.dat");
+        return -1;
+    }
+
+    off_t filesize = lseek(fd, 0, SEEK_END);
+    if (filesize == -1) {
+        perror("lseek failed");
+        close(fd);
+        return -1;
+    }
+
+    int total_records = filesize / sizeof(report_t);
+
+    // find the record with the matching reportID
+    int target_pos = -1;
+    report_t report;
+    for (int i = 0; i < total_records; i++) {
+        lseek(fd, (off_t)i * sizeof(report_t), SEEK_SET);
+        if (read(fd, &report, sizeof(report_t)) != sizeof(report_t)) {
+            perror("read failed");
+            close(fd);
+            return -1;
+        }
+        if (report.reportID == id) {
+            target_pos = i;
+            break;
+        }
+    }
+
+    if (target_pos == -1) {
+        printf("Report #%d not found in district '%s'.\n", id, districtID);
+        close(fd);
+        return -1;
+    }
+
+    // shift every record after target_pos one position earlier
+    for (int i = target_pos + 1; i < total_records; i++) {
+        // read record at position i
+        lseek(fd, (off_t)i * sizeof(report_t), SEEK_SET);
+        if (read(fd, &report, sizeof(report_t)) != sizeof(report_t)) {
+            perror("read failed during shift");
+            close(fd);
+            return -1;
+        }
+
+        // write it one position earlier
+        lseek(fd, (off_t)(i - 1) * sizeof(report_t), SEEK_SET);
+        if (write(fd, &report, sizeof(report_t)) != sizeof(report_t)) {
+            perror("write failed during shift");
+            close(fd);
+            return -1;
+        }
+    }
+
+    // truncate the file by exactly one record
+    if (ftruncate(fd, filesize - sizeof(report_t)) == -1) {
+        perror("ftruncate failed");
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    printf("Report #%d removed successfully.\n", id);
+    return OK;
+}
+
+int update_threshold(char* districtID, char* value)
+{
+    // check manager role
+    if (role != MANAGER) {
+        printf("Permission denied: update_threshold is for managers only.\n");
+        return -1;
+    }
+
+    int threshold = atoi(value);
+    if (threshold < 1 || threshold > 3) {
+        printf("Invalid threshold value '%s': must be 1, 2, or 3.\n", value);
+        return -1;
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/district.cfg", RELATIVE_FILEPATH, districtID);
+
+    // stat() first to verify permission bits
+    struct stat fileStats;
+    if (stat(path, &fileStats) == -1) {
+        perror("stat district.cfg failed");
+        return -1;
+    }
+
+    // mask out only the permission bits from fileStats.st_mode
+    // fileStats.st_mode also contains file type bits, so & with 0777 to isolate permissions
+    mode_t perms = fileStats.st_mode & 0777;
+    if (perms != 0640) {
+        char symbolic[10];
+        permission_bits_to_symbolic(fileStats.st_mode, symbolic);
+        printf("Security error: district.cfg has unexpected permissions %s (expected rw-r-----).\n", symbolic);
+        printf("Refusing to write. Restore permissions with: chmod 640 %s\n", path);
+        return -1;
+    }
+
+    int fd = open(path, O_WRONLY | O_TRUNC);
+    if (fd == -1) {
+        perror("open district.cfg");
+        return -1;
+    }
+
+    char buf[3];
+    int len = snprintf(buf, sizeof(buf), "%d\n", threshold);
+    if (write(fd, buf, len) == -1) {
+        perror("write failed");
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    printf("Threshold updated to %d for district '%s'.\n", threshold, districtID);
+    return OK;
+}
+
+int view_specific_report(char* districtID, char* reportID) 
+{
+    // convert reportID string to int
+    int id = atoi(reportID);
+    if (id < 0) {
+        printf("Invalid report ID: '%s'\n", reportID);
+        return -1;
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror("open reports.dat");
+        return -1;
+    }
+
+    // jump directly to the record: IDs are 0-based
+    off_t offset = (off_t)(id) * sizeof(report_t);
+    if (lseek(fd, offset, SEEK_SET) == -1) {
+        perror("lseek failed");
+        close(fd);
+        return -1;
+    }
+
+    report_t report;
+    ssize_t bytes_read = read(fd, &report, sizeof(report_t));
+    close(fd);
+
+    if (bytes_read != sizeof(report_t)) {
+        printf("Report #%d not found in district '%s', error in jumping with offset given by reportID.\n", id, districtID);
+        return -1;
+    }
+
+    // format timestamp
+    char timeStamp[64];
+    struct tm* time = localtime(&report.timestamp);
+    strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d %H:%M:%S", time);
+
+    // print full details
+    printf("========== Report #%d ==========\n", report.reportID);
+    printf("Inspector: %s\n",   report.inspectorName);
+    printf("Timestamp: %s\n",   timeStamp);
+    printf("Latitude: %f\n", report.coords.x);
+    printf("Longitude: %f\n", report.coords.y);
+    printf("Category: %s\n",   report.issueCategory);
+    printf("Severity: %d - ", report.severityLevel);
+    if (report.severityLevel == 1)
+        printf("minor\n");
+    else if (report.severityLevel == 2)
+        printf("moderate\n");
+    else
+        printf("critical\n");
+    printf("Description: %s\n",   report.description);
+    printf("================================\n");
+
+    return OK;
+}
+
+int list_reports(char* districtID)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
+
+    struct stat reportStats;
+    if (stat(path, &reportStats) == -1) {
+        perror("stat failed - does the district exist?");
+        return -1;
+    }
+
+    // convert permission bits to symbolic form
+    char perms[10];
+    permission_bits_to_symbolic(reportStats.st_mode, perms);
+
+    // format modification time into readable string
+    char timebuf[64];
+    struct tm* tm_info = localtime(&reportStats.st_mtime);
+    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
+
+    // print file info header
+    printf("=== reports.dat ===\n");
+    printf("Permissions: %s\n", perms);
+    printf("Size: %lld bytes\n", (long long)reportStats.st_size);
+    printf("Last modified: %s\n", timebuf);
+    printf("Records: %lld\n", (long long)(reportStats.st_size / sizeof(report_t))); // no. of records
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror("open reports.dat");
+        return -1;
+    }
+
+    report_t report;
+    int count = 0;
+    while (read(fd, &report, sizeof(report_t)) == sizeof(report_t)) { // while full reports being read
+        char timeStamp[64];
+        struct tm* time = localtime(&report.timestamp);
+        strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d %H:%M:%S", time);
+
+        printf("ID: %d | Inspector: %s | Category: %s | Severity: %d | Time: %s\n",
+            report.reportID,
+            report.inspectorName,
+            report.issueCategory,
+            report.severityLevel,
+            timeStamp);
+        count++;
+    }
+
+    if (count == 0)
+        printf("No reports found in district '%s'.\n", districtID);
+
+    close(fd);
+    return OK;
 }
 
 /*
@@ -230,62 +506,6 @@ int add_report(char* districtID)
     return 5;
 }
 
-int list_reports(char* districtID)
-{
-    char path[256];
-    snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
-
-    struct stat reportStats;
-    if (stat(path, &reportStats) == -1) {
-        perror("stat failed - does the district exist?");
-        return -1;
-    }
-
-    // convert permission bits to symbolic form
-    char perms[10];
-    permission_bits_to_symbolic(reportStats.st_mode, perms);
-
-    // format modification time into readable string
-    char timebuf[64];
-    struct tm* tm_info = localtime(&reportStats.st_mtime);
-    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
-
-    // print file info header
-    printf("=== reports.dat ===\n");
-    printf("Permissions: %s\n", perms);
-    printf("Size: %lld bytes\n", (long long)reportStats.st_size);
-    printf("Last modified: %s\n", timebuf);
-    printf("Records: %lld\n", (long long)(reportStats.st_size / sizeof(report_t))); // no. of records
-
-    int fd = open(path, O_RDONLY);
-    if (fd == -1) {
-        perror("open reports.dat");
-        return -1;
-    }
-
-    report_t report;
-    int count = 0;
-    while (read(fd, &report, sizeof(report_t)) == sizeof(report_t)) { // while full reports being read
-        char timeStamp[64];
-        struct tm* time = localtime(&report.timestamp);
-        strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d %H:%M:%S", time);
-
-        printf("ID: %d | Inspector: %s | Category: %s | Severity: %d | Time: %s\n",
-            report.reportID,
-            report.inspectorName,
-            report.issueCategory,
-            report.severityLevel,
-            timeStamp);
-        count++;
-    }
-
-    if (count == 0)
-        printf("No reports found in district '%s'.\n", districtID);
-
-    close(fd);
-    return OK;
-}
-
 int write_report(char* reportFilepath)
 {
     int fd = open(reportFilepath, O_WRONLY | O_APPEND, 0664); // 0664 if the file does not exist 
@@ -330,7 +550,7 @@ int write_report(char* reportFilepath)
     do {
         printf("Severity level (1/2/3): ");
         if (scanf("%d", &report.severityLevel) != 1) {
-            // flush buffer - if scanf() doesn't match then value remains in buffer)
+            // flush buffer - if scanf() doesn'time match then value remains in buffer)
             char c;
             while ((c = getchar() != '\n') && (c != EOF))
                 ;
@@ -340,7 +560,7 @@ int write_report(char* reportFilepath)
     } while (report.severityLevel < 1 || report.severityLevel > 3); 
 
     printf("Description: ");
-    // flush stdin first so the newline from previous scanf doesn't get consumed
+    // flush stdin first so the newline from previous scanf doesn'time get consumed
     int c; 
     while ((c = getchar()) != '\n' && c != EOF)
         ;
@@ -368,7 +588,7 @@ int get_next_report_id(int fd) {
         return -1;
     
     int count = size / sizeof(report_t); // number of records already in file
-    return count; // next ID - ID's start at 0 so we don't increment it
+    return count; // next ID - ID's start at 0 so we don'time increment it
 }
 
 int create_district(char* districtID)

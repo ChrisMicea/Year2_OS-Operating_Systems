@@ -1,0 +1,3 @@
+--- sa fac consistent return type-urile la toate functiile, folosesc enum
+--- in view, list (si altele, daca e cazul), sa incerc sa ma folosesc mai intai de symlink, abia apoi de directory path, ca in add_report
+--- sa fac sa mearga logged_district.txt sa dea record automat la toate operatiunile pe un district
