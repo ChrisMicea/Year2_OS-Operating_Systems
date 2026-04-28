@@ -1,8 +1,20 @@
-#ifndef TEST_H
+#ifndef COMMONS_H
 
-#define TEST_H
+#define COMMONS_H
+
+// header / library for defines, common datatypes and data structures (and all of the weir libraries used for system calls)
+// as well as standard libraries that are needed everywhere
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 
 #include <time.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
 
 #define NAME_LEN 20
 #define ISSUE_CATEGORY_LEN 20
@@ -33,4 +45,7 @@ typedef enum {
     ERROR
 } returnType_t;
 
-#endif // TEST_H
+extern role_t role;
+extern char user[NAME_LEN];
+
+#endif // COMMONS_H

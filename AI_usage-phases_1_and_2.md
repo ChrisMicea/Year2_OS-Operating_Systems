@@ -1,0 +1,1 @@
+The first thing I did was ask the Claude for recommendations as to how I could reorganize my source code into a batter file structure.
