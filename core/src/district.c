@@ -2,6 +2,12 @@
 
 int create_district(char* districtID)
 {
+    // manager only
+    if (role != MANAGER) {
+        printf("Permission denied: create_district is for managers only.\n");
+        return -1;
+    }
+
     char path[256] = "";
     int fd;
 
@@ -113,5 +119,51 @@ int update_threshold(char* districtID, char* value)
 
     close(fd);
     printf("Threshold updated to %d for district '%s'.\n", threshold, districtID);
+    return OK;
+}
+
+int remove_district(char* districtID)
+{
+    // manager only
+    if (role != MANAGER) {
+        printf("Permission denied: remove_district is for managers only.\n");
+        return -1;
+    }
+
+    pid_t pid;
+
+    if ((pid = fork()) < 0) {
+        printf("Couldn't fork\n");
+        return -1;
+    }
+
+    // child process - calls rm -rf on the district directory
+    if (pid == 0) {
+        char districtPath[256];
+        snprintf(districtPath, sizeof(districtPath), "%s%s", RELATIVE_FILEPATH, districtID);
+
+        execlp("rm", "rm", "-rf", districtPath, NULL);
+
+        // if execlp runs successfully, the process is overwritten => no way for execution to reach here unless execlp() fails
+        printf("Error in executing deletion\n");
+        perror("execlp failed");
+        exit(1); // do not use return ... in child !!!!
+    }
+    // parent process - deletes the corresponding active_reports-* symlink
+    else {
+        char symLinkName[256] = "active_reports-";
+        strcat(symLinkName, districtID);
+
+        int status;
+        waitpid(pid, &status, 0); // wait for the child process to remove the directory before continuing
+        
+        // execlp("rm", "rm", symLinkName, NULL); // not good - would have overwritten the parent process
+        if (unlink(symLinkName) == -1) {
+            perror("deleting symlink failed");
+            return -1;
+        }
+    }
+
+    printf("District '%s' and its symlink removed successfully.\n", districtID);
     return OK;
 }

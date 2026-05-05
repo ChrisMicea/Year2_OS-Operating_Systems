@@ -90,11 +90,17 @@ int handle_user_commands(int argc, char* argv[])
         retVal = add(argc, argv);
     }
     else if (strcmp(argv[0], "--list") == 0) {
-        retVal = list_reports(argv[1]);
+        if (argc != 2) {
+            printf("Incorrect usage - not enough or too many arguments for 'list'\n");
+            print_usage();
+        }
+        else {
+            retVal = list_reports(argv[1]);
+        }
     }
     else if (strcmp(argv[0], "--view") == 0) {
-        if (argc < 3) {
-            printf("Incorrect usage - not enough arguments for 'view'\n");
+        if (argc != 3) {
+            printf("Incorrect usage - not enough or too many arguments for 'view'\n");
             print_usage();
         }
         else {
@@ -102,8 +108,8 @@ int handle_user_commands(int argc, char* argv[])
         }
     }
     else if (strcmp(argv[0], "--remove_report") == 0) {
-        if (argc < 3) {
-            printf("Incorrect usage - not enough arguments for 'remove report'\n");
+        if (argc != 3) {
+            printf("Incorrect usage - not enough or too many arguments for 'remove report'\n");
             print_usage();
         }
         else {
@@ -111,8 +117,8 @@ int handle_user_commands(int argc, char* argv[])
         }
     }
     else if (strcmp(argv[0], "--update_threshold") == 0) {
-        if (argc < 3) {
-            printf("Incorrect usage - not enough arguments for 'update threshold'\n");
+        if (argc != 3) {
+            printf("Incorrect usage - not enough or too many arguments for 'update threshold'\n");
             print_usage();
         }
         else {
@@ -128,6 +134,15 @@ int handle_user_commands(int argc, char* argv[])
             // argv[1] = districtID, argv[2..] = one condition per slot
             int nConditions = argc - 2;
             retVal = filter_reports(argv[1], argv + 2, nConditions);
+        }
+    }
+    else if (strcmp(argv[0], "--remove_district") == 0) {
+        if (argc != 2) {
+            printf("Incorrect usage - not enough or too many arguments for 'remove_district'\n");
+            print_usage();
+        }
+        else {
+            retVal = remove_district(argv[1]);
         }
     }
 
