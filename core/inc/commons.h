@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <signal.h>
 
 #define NAME_LEN 20
 #define ISSUE_CATEGORY_LEN 20
