@@ -1,7 +1,7 @@
-modific logica de la view astfel incat s caute dupa district ID, nu sa dea jump cu atatea pozitii cate primeste ca si parametru
+modific logica de la view astfel incat sa caute dupa district ID, nu sa dea jump cu atatea pozitii cate primeste ca si parametru
     exemplu: pt downtown, cum arata acum, daca dai view downtown 3 nu iti va gasi, pt ca raportul cu ID 3 e pe pozitia 1 => da jump cu offset 3 si nu gaseste
 
-adaug aceleasi verificari ca si in create_district din district.c, legat de dimensiunea comenzii (districtID) + dimensiunea a relative_filepath sa fie mai mica ca si buffer PESTE TOT !!!!!!!!!!!!!!!!!!!!1
+adaug aceleasi verificari ca si in create_district din district.c, legat de dimensiunea comenzii (districtID) + dimensiunea a relative_filepath sa fie mai mica ca si buffer PESTE TOT !!!!!!!!!!!!!!!!!!!!
 
 --- sa adaug un print function comun pt code duplication in view_specific_report, list_reports si filter_reports
 --- sa fac consistent return type-urile la toate functiile, folosesc enum

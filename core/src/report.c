@@ -30,7 +30,7 @@ int add_report(char* districtID)
         }
         resolvedLink[len] = '\0'; // readlink() does not null terminate !!!!!!!!
         closedir(directories);
-        return write_report(resolvedLink);
+        return write_report(resolvedLink, districtID);
     }
 
     printf("Symbolic link to the required reports file for the district not found!\n");
@@ -48,7 +48,7 @@ int add_report(char* districtID)
             char path[256];
             snprintf(path, sizeof(path), "%s%s/reports.dat", RELATIVE_FILEPATH, districtID);
             closedir(directories);
-            return write_report(path);
+            return write_report(path, districtID);
         }
     }
 
@@ -57,7 +57,7 @@ int add_report(char* districtID)
     return 5;
 }
 
-int write_report(char* reportFilepath)
+int write_report(char* reportFilepath, char* districtID)
 {
     int fd = open(reportFilepath, O_WRONLY | O_APPEND, 0664); // 0664 if the file does not exist 
     if (fd == -1) {
@@ -128,6 +128,41 @@ int write_report(char* reportFilepath)
 
     close(fd);
     printf("Report #%d added successfully.\n", report.reportID);
+
+    // notify monitor and log the result
+    char log_msg[256];
+    int result = notify_monitor(SIGUSR1);
+
+    if (result > 0) { // pid returned ok, signal was send successfully
+        snprintf(log_msg, sizeof(log_msg), "Report with ID: %d added\nMonitor notified (PID %d)", report.reportID, result);
+    } 
+    else {
+        char *reason;
+        switch (result) {
+            case -1: 
+                reason = "No '.monitor_pid' file found (monitor not running)"; 
+                break;
+            case -2: 
+                reason = "PID file is empty or unreadable";
+                break;
+            case -3: 
+                reason = "PID file contains an invalid PID (< 0)";
+                break;
+            case -4: 
+                reason = "Signal could not be sent (process gone, permission denied, wrong PID stored etc.)";
+                break;
+            default: 
+                reason = "Unknown error";
+                break;
+        }
+        snprintf(log_msg, sizeof(log_msg), "Report with ID: %d added\nError: Monitor could not be notified\n%s", 
+            report.reportID, reason);
+    }
+
+    if (log_event(districtID, log_msg) < 0) {
+        printf("Error writing log in appropriate logged_districts file\n");
+        return -2;
+    }
 
     return OK;
 }
@@ -340,6 +375,42 @@ int remove_report(char* districtID, char* reportID)
 
     close(fd);
     printf("Report #%d removed successfully.\n", id);
+
+    // notify monitor and log the result
+    char log_msg[256];
+    int result = notify_monitor(SIGUSR1);
+
+    if (result > 0) { // pid returned ok, signal was send successfully
+        snprintf(log_msg, sizeof(log_msg), "Report with ID: %d removed\nMonitor notified (PID %d)", report.reportID, result);
+    } 
+    else {
+        char *reason;
+        switch (result) {
+            case -1: 
+                reason = "No '.monitor_pid' file found (monitor not running)"; 
+                break;
+            case -2: 
+                reason = "PID file is empty or unreadable";
+                break;
+            case -3: 
+                reason = "PID file contains an invalid PID (< 0)";
+                break;
+            case -4: 
+                reason = "Signal could not be sent (process gone, permission denied, wrong PID stored etc.)";
+                break;
+            default: 
+                reason = "Unknown error";
+                break;
+        }
+        snprintf(log_msg, sizeof(log_msg), "Report with ID: %d removed\nError: Monitor could not be notified\n%s", 
+            report.reportID, reason);
+    }
+
+    if (log_event(districtID, log_msg) < 0) {
+        printf("Error writing log in appropriate logged_districts file\n");
+        return -2;
+    }
+
     return OK;
 }
 

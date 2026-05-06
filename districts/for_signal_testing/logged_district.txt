@@ -1,0 +1,9 @@
+[2026-05-06 16:06:39] Report with ID: 2 added
+Monitor notified (PID 7830)
+[2026-05-06 16:07:29] Report with ID: 3 added
+Error: Monitor could not be notified (signal could not be sent (process gone or permission denied))
+[2026-05-06 16:30:49] Report with ID: 3 removed
+Monitor notified (PID 8950)
+[2026-05-06 16:31:54] Report with ID: 3 removed
+Error: Monitor could not be notified
+No .monitor_pid file found (monitor not running)

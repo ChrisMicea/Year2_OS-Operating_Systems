@@ -35,3 +35,63 @@ void permission_bits_to_symbolic(mode_t mode, char* out)
     out[8] = (mode & S_IXOTH) ? 'x' : '-';
     out[9] = '\0';
 }
+
+// signal as a parameter because we can either send SIGUSR1 for reports or SIGUSR2 for districts
+// return monitor_pid on success or a specific error code on failure
+int notify_monitor(int signal)
+{
+    char pid_path[256];
+    snprintf(pid_path, sizeof(pid_path), "%s.monitor_pid", RELATIVE_FILEPATH);
+
+    int fd = open(pid_path, O_RDONLY);
+    if (fd == -1)
+        return -1; // no PID file — monitor not running
+
+    // read PID from file (.monitor_pid)
+    char buf[16];
+    ssize_t len = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (len <= 0)
+        return -2; // empty or unreadable file
+    buf[len] = '\0';
+
+    pid_t monitor_pid = (pid_t)(atoi(buf));
+    if (monitor_pid <= 0)
+        return -3; // invalid PID
+
+    if (kill(monitor_pid, signal) == -1)
+        return -4; // couldn't send process (or permission denied)
+
+    return monitor_pid; // return PID so caller can log it
+}
+
+int log_event(char* districtID, char* message)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "%s%s/logged_district.txt", RELATIVE_FILEPATH, districtID);
+
+    int fd = open(path, O_WRONLY | O_APPEND);
+    if (fd == -1) {
+        perror("open logged_district.txt");
+        return -1;
+    }
+
+    // build timestamp
+    char timebuf[32];
+    time_t now = time(NULL); // returns current time
+    struct tm* tm_info = localtime(&now);
+    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm_info);
+
+    // write the log
+    char entry[512];
+    int len = snprintf(entry, sizeof(entry), "[%s] %s\n", timebuf, message);
+    if (write(fd, entry, len) == -1) {
+        perror("write to logged_district.txt");
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    return OK;
+}

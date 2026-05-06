@@ -65,7 +65,41 @@ int create_district(char* districtID)
         return -1;
     }
 
-    return 0;
+    printf("Disctrict added successfully.\n");
+
+    // notify monitor
+    char log_msg[256];
+    int result = notify_monitor(SIGUSR2);
+
+    if (result > 0) { // pid returned ok, signal was send successfully
+        snprintf(log_msg, sizeof(log_msg), "District with ID: %s added\nMonitor notified (PID %d)", districtID, result);
+    } 
+    else {
+        char *reason;
+        switch (result) {
+            case -1: 
+                reason = "No .monitor_pid file found (monitor not running)"; 
+                break;
+            case -2: 
+                reason = "PID file is empty or unreadable";
+                break;
+            case -3: 
+                reason = "PID file contains an invalid PID (< 0)";
+                break;
+            case -4: 
+                reason = "Signal could not be sent (process gone, permission denied, wrong PID stored etc.)";
+                break;
+            default: 
+                reason = "Unknown error";
+                break;
+        }
+        snprintf(log_msg, sizeof(log_msg), "District with ID: %s added\nError: Monitor could not be notified\n%s", 
+            districtID, reason);
+    }
+
+    printf("%s\n", log_msg);
+
+    return OK;
 }
 
 int update_threshold(char* districtID, char* value)
@@ -165,5 +199,38 @@ int remove_district(char* districtID)
     }
 
     printf("District '%s' and its symlink removed successfully.\n", districtID);
+
+    // notify monitor
+    char log_msg[256];
+    int result = notify_monitor(SIGUSR2);
+
+    if (result > 0) { // pid returned ok, signal was send successfully
+        snprintf(log_msg, sizeof(log_msg), "District with ID: %s removed\nMonitor notified (PID %d)", districtID, result);
+    } 
+    else {
+        char *reason;
+        switch (result) {
+            case -1: 
+                reason = "No .monitor_pid file found (monitor not running)"; 
+                break;
+            case -2: 
+                reason = "PID file is empty or unreadable";
+                break;
+            case -3: 
+                reason = "PID file contains an invalid PID (< 0)";
+                break;
+            case -4: 
+                reason = "Signal could not be sent (process gone, permission denied, wrong PID stored etc.)";
+                break;
+            default: 
+                reason = "Unknown error";
+                break;
+        }
+        snprintf(log_msg, sizeof(log_msg), "District with ID: %s removed\nError: Monitor could not be notified\n%s", 
+            districtID, reason);
+    }
+
+    printf("%s\n", log_msg);
+
     return OK;
 }

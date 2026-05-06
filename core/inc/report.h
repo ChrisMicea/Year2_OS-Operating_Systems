@@ -6,7 +6,7 @@
 #include "utils.h"
 
 int add_report(char* districtID);
-int write_report(char* reportFilepath);
+int write_report(char* reportFilepath, char* districtID);
 int get_next_report_id(int fd);
 int list_reports(char* districtID);
 int view_specific_report(char* districtID, char* reportID);

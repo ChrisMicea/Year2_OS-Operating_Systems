@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra -g
 INC = -Icore/inc
 
 # city_manager sources
-SRC = core/src/city_manager.c \
+CM_SRC = core/src/city_manager.c \
     core/src/district.c \
     core/src/report.c \
 	core/src/utils.c
