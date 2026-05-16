@@ -20,6 +20,14 @@ void print_usage() {
         );
 }
 
+void print_usage_hub() {
+    printf("Usage:\n"
+            "start_monitor - launch the monitor background process\n"
+            "calculate_scores <list_of_districts> - calculate the inspector rating for each district given as parameter\n"
+            "help - show this message\n"
+            "exit / quit - quit city_hub\n"
+        );
+}
 
 void permission_bits_to_symbolic(mode_t mode, char* out)
 {

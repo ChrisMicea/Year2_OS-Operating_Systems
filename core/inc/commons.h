@@ -22,6 +22,8 @@
 #define ISSUE_CATEGORY_LEN 20
 #define DESCRIPTION_LEN 200
 #define RELATIVE_FILEPATH "./districts/" 
+#define MAX_INSPECTORS 64
+#define MAX_DISTRICTS 64
 
 typedef struct {
     int reportID;

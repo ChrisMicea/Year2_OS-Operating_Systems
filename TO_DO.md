@@ -3,9 +3,10 @@ modific logica de la view astfel incat sa caute dupa district ID, nu sa dea jump
 
 adaug aceleasi verificari ca si in create_district din district.c, legat de dimensiunea comenzii (districtID) + dimensiunea a relative_filepath sa fie mai mica ca si buffer PESTE TOT !!!!!!!!!!!!!!!!!!!!
 
+modific logica din city_hub -> calculate_scores() asa incat cand da fail orice fork() sau pipe() sa dea exit frumos programul
+
 --- sa adaug un print function comun pt code duplication in view_specific_report, list_reports si filter_reports
 --- sa fac consistent return type-urile la toate functiile, folosesc enum
 --- in view, list (si altele, daca e cazul), sa incerc sa ma folosesc mai intai de symlink, abia apoi de directory path, ca in add_report
---- sa fac sa mearga logged_district.txt sa dea record automat la toate operatiunile pe un district
 --- scan, detect and report dangling symbolic links
 --- update ai_usage.md maybe if first lines of description / storytelling are not enough

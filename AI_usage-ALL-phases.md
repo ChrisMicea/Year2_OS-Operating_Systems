@@ -1,12 +1,17 @@
+# Phase 1
+
 The tool used was Claude.
+
 I really liked how it used a lot of helper functions - this is something that I kind of learned and that I hope to apply in the future.
+
 I also like how it splits long lines of code into more shorter lines. In different cases, the syntax for doing this is different, so I learned things like that too.
+
 Lastly, I used AI for consulting me on things like proper file and folder structure and that helps a lot.
 
 I really don't like how it formats code sometimes, so, for example, I changed unclear variable names like 'r' to report.
 However, I preserved most of its logic intact to keep the spirit of the experiment. Besides, most of the work it has done is writing a lot of tedious code with a lot of if...elses to check for possible errors
 
-My first prompt:
+## My first prompt:
 
 Okay, here are my current working files for the project:
 #ifndef TEST_H
@@ -42,7 +47,7 @@ typedef enum {
 int parse_condition(const char *input, char *field, char *op, char *value);
       which splits a field:operator:value string into its three parts.
 
-The AI response:
+**The AI response:**
 
 Looking at your code and the project structure, I'll implement parse_condition that splits a condition string like severity:>:2 or category:==:flooding into its three parts.Here's the parse_condition function. I'll also show a quick diagram of how it works, then explain the design decisions.
 
@@ -134,7 +139,7 @@ if (parse_condition(argv[2], field, op, value) != 0) {
 When you're ready, the next step is the filter function itself — which will call parse_condition, then iterate reports.dat comparing each report_t field against the parsed condition. Let me know if you want to tackle that next or adjust anything here first.
 
 
-Second prompt:
+## Second prompt:
 
 ok perfect, and as for the second function,
 int match_condition(Report *r, const char *field, const char *op, const char *value);
@@ -152,7 +157,7 @@ typedef struct {
     char description[DESCRIPTION_LEN];
 } report_t;
 
-AI response:
+**AI response:**
 
 /*
  * match_condition - returns 1 if report r satisfies field op value, 0 otherwise.
@@ -272,6 +277,7 @@ int match_condition(const report_t *r, const char *field,
     fprintf(stderr, "match_condition: unknown field \"%s\"\n", field);
     return 0;
 }
+
 A few things worth calling out:
 Type dispatch is explicit, not generic. Rather than casting everything to a string and comparing, each field is matched to its actual C type — long for integer fields, double for the float coordinates, const char * for the character arrays. This avoids the classic pitfall where "9" > "10" lexicographically but 9 < 10 numerically.
 String fields reject ordering operators. Allowing description:>:foo would silently use strcmp ordering, which is almost never what a user of this tool intends. cmp_string logs a diagnostic and returns 0 instead.
@@ -279,3 +285,32 @@ atol/atof are acceptable here because parse_condition already validated that val
 timestamp takes a Unix epoch integer — so a user would filter with something like timestamp:>:1700000000. If you want human-readable date strings later, that's a small extension to parse_condition + match_condition (parse the string with strptime, convert to time_t, then compare).
 Convenient aliases (lat/lon, id, inspector, category, severity) match the shorthand a user would naturally type in the CLI, while the underlying struct field names stay internal.
 When you're ready for the filter command itself, it'll just be: open reports.dat, read each report_t, call parse_condition once, then loop calling match_condition on each record and print matches.
+
+# Phase 2
+
+The first thing I did was ask the Claude for recommendations as to how I could reorganize my source code into a batter file structure.
+
+Also, I asked it to help me create a **Makefile** for easy compiling of the source code and better organization. (Only one executable in the project root, no more dangling .o files and putting them inside build/)
+
+In general for this phase, I got major help from Claude with the **Makefile**, this is my first time working with a custom **Makefile** built by me, and I learned a lot. Some of the syntax is actually similar to the script/shell syntax, that we learned in the first lab :) .
+
+Lastly, I asked it to review my code quite a bit, especially since some operations/functions implemented for this phase are really sensitive, like deleting districts. It also gave me suggestions to use what I like to call "incantations", a.k.a. snippets of code that perform specific functions correctly and that rae unintuitive, like:
+
+_exit(0);
+
+instead of:
+
+exit(0)
+
+In those cases, I always wrote comments to explain why the code was written that way.
+
+# Phase 3
+
+Claude pointed out to me some syntax errors that I had in the Makefile.
+
+I used it to help me have nicer output printed.
+
+It also suggested a standardized message payload for the reports monitor to be later used in the city_hub program. I went ahead with it.
+
+What it struggled with was maintaining consistency with patterns of code already built in this project. It couldn't really maintain consistency with the style and patterns of code already built / used by me. It also tried overcomplicating a lot of things with overengineered patterns like an "accumulator" always being "filled" and "drained" for the city_hub hub_mon subprocess.  
+
